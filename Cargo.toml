@@ -1,0 +1,18 @@
+[package]
+name = "frak"
+version = "0.1.0"
+description = "Simple fractal explorer"
+keywords = ["fractal", "mandelbrot"]
+edition = "2021"
+authors = ["Mate Kovacs"]
+license = "MIT"
+repository = "https://github.com/mkovaxx/frak"
+
+[dependencies]
+anyhow = "1.0"
+env_logger = "0.9"
+image = { version = "0.24", default-features = false, features = ["png", "jpeg"] }
+log = "0.4"
+pollster = "0.2"
+wgpu = "0.13"
+winit = "0.26"
