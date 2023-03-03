@@ -51,8 +51,8 @@ pub fn main() {
             Event::RedrawRequested(window_id) if window_id == window.id() => {
                 state.update();
                 window.set_title(&format!(
-                    "frak :: mandelbrot :: center=({}, {}), radius={}",
-                    state.view.center.x, state.view.center.y, state.view.radius
+                    "frak :: mandelbrot :: center=({}, {}), scale={}",
+                    state.view.center.x, state.view.center.y, state.view.scale
                 ));
                 match state.render() {
                     Ok(_) => {}
@@ -78,14 +78,14 @@ pub fn main() {
 
 struct View {
     center: Vector2<f32>,
-    radius: f32,
+    scale: f32,
 }
 
 impl View {
     fn new() -> View {
         View {
             center: Vector2::new(-1.0, 0.0),
-            radius: 1.5,
+            scale: 0.7,
         }
     }
 }
@@ -108,21 +108,33 @@ impl ViewUniform {
 
     fn update(&mut self, view: &View, size: &winit::dpi::PhysicalSize<u32>) {
         self.center = view.center.into();
+        let radius = f32::powf(2.0, view.scale);
         self.extent = if size.width <= size.height {
-            [
-                view.radius,
-                view.radius * size.height as f32 / size.width as f32,
-            ]
+            [radius, radius * size.height as f32 / size.width as f32]
         } else {
-            [
-                view.radius * size.width as f32 / size.height as f32,
-                view.radius,
-            ]
+            [radius * size.width as f32 / size.height as f32, radius]
+        }
+    }
+}
+
+struct Mouse {
+    x: f64,
+    y: f64,
+    buttons: u32,
+}
+
+impl Mouse {
+    fn new() -> Mouse {
+        Mouse {
+            x: 0.0,
+            y: 0.0,
+            buttons: 0,
         }
     }
 }
 
 struct State {
+    mouse: Mouse,
     view: View,
 
     surface: wgpu::Surface,
@@ -273,6 +285,7 @@ impl State {
 
         Self {
             view,
+            mouse: Mouse::new(),
             surface,
             device,
             queue,
@@ -294,9 +307,47 @@ impl State {
         }
     }
 
-    #[allow(unused_variables)]
     fn input(&mut self, event: &WindowEvent) -> bool {
-        false
+        match event {
+            WindowEvent::CursorMoved {
+                device_id,
+                position,
+                ..
+            } => {
+                let radius = f32::powf(2.0, self.view.scale);
+                let size = u32::min(self.size.width, self.size.height);
+                let dx = position.x - self.mouse.x;
+                let dy = position.y - self.mouse.y;
+                if (self.mouse.buttons & 1) != 0 {
+                    self.view.center -=
+                        (2.0 * radius / size as f32) * Vector2::new(dx as f32, -dy as f32);
+                } else if (self.mouse.buttons & 2) != 0 {
+                    self.view.scale -= dy as f32 / size as f32;
+                }
+                self.mouse.x = position.x;
+                self.mouse.y = position.y;
+                true
+            }
+            WindowEvent::MouseInput {
+                device_id,
+                state,
+                button,
+                ..
+            } => {
+                let mask = match button {
+                    MouseButton::Left => 1,
+                    MouseButton::Right => 2,
+                    MouseButton::Middle => 3,
+                    MouseButton::Other(_) => 0,
+                };
+                match state {
+                    ElementState::Pressed => self.mouse.buttons |= mask,
+                    ElementState::Released => self.mouse.buttons &= !mask,
+                }
+                true
+            }
+            _ => false,
+        }
     }
 
     fn update(&mut self) {}
