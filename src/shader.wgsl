@@ -21,7 +21,7 @@ fn div_complex(a: vec2<f32>, b: vec2<f32>) -> vec2<f32> {
 }
 
 fn eval(c: vec2<f32>, iter_max: u32) -> vec3<f32> {
-    var z: vec2<f32> = c;
+    var z = c;
     var dz = vec2(1.0, 0.0);
 
     for (var i: u32 = 0u; i < iter_max; i++) {
