@@ -1,5 +1,8 @@
 use std::iter;
 
+use cgmath::Vector2;
+
+use wgpu::util::DeviceExt;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -38,7 +41,7 @@ pub fn main() {
                             state.resize(*physical_size);
                         }
                         WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                            // new_inner_size is &&mut so w have to dereference it twice
+                            // new_inner_size is &&mut so we have to dereference it twice
                             state.resize(**new_inner_size);
                         }
                         _ => {}
@@ -47,6 +50,10 @@ pub fn main() {
             }
             Event::RedrawRequested(window_id) if window_id == window.id() => {
                 state.update();
+                window.set_title(&format!(
+                    "frak :: mandelbrot :: center=({}, {}), radius={}",
+                    state.view.center.x, state.view.center.y, state.view.radius
+                ));
                 match state.render() {
                     Ok(_) => {}
                     // Reconfigure the surface if it's lost or outdated
@@ -69,12 +76,63 @@ pub fn main() {
     });
 }
 
+struct View {
+    center: Vector2<f32>,
+    radius: f32,
+}
+
+impl View {
+    fn new() -> View {
+        View {
+            center: Vector2::new(-1.0, 0.0),
+            radius: 1.5,
+        }
+    }
+}
+
+#[repr(C)]
+// This is so we can store this in a buffer
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct ViewUniform {
+    center: [f32; 2],
+    extent: [f32; 2],
+}
+
+impl ViewUniform {
+    fn new() -> Self {
+        Self {
+            center: [0.0, 0.0],
+            extent: [1.0, 1.0],
+        }
+    }
+
+    fn update(&mut self, view: &View, size: &winit::dpi::PhysicalSize<u32>) {
+        self.center = view.center.into();
+        self.extent = if size.width <= size.height {
+            [
+                view.radius,
+                view.radius * size.height as f32 / size.width as f32,
+            ]
+        } else {
+            [
+                view.radius * size.width as f32 / size.height as f32,
+                view.radius,
+            ]
+        }
+    }
+}
+
 struct State {
+    view: View,
+
     surface: wgpu::Surface,
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
+    view_uniform: ViewUniform,
+    view_buffer: wgpu::Buffer,
+    view_bind_group: wgpu::BindGroup,
     render_pipeline: wgpu::RenderPipeline,
 }
 
@@ -123,6 +181,40 @@ impl State {
         };
         surface.configure(&device, &config);
 
+        let view = View::new();
+
+        let view_uniform = ViewUniform::new();
+
+        let view_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("View Buffer"),
+            contents: bytemuck::cast_slice(&[view_uniform]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let view_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+                label: Some("view_bind_group_layout"),
+            });
+
+        let view_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &view_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: view_buffer.as_entire_binding(),
+            }],
+            label: Some("view_bind_group"),
+        });
+
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
@@ -131,7 +223,7 @@ impl State {
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[],
+                bind_group_layouts: &[&view_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -180,11 +272,15 @@ impl State {
         });
 
         Self {
+            view,
             surface,
             device,
             queue,
             config,
             size,
+            view_uniform,
+            view_buffer,
+            view_bind_group,
             render_pipeline,
         }
     }
@@ -207,9 +303,14 @@ impl State {
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         let output = self.surface.get_current_texture()?;
+
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
+
+        self.view_uniform.update(&self.view, &self.size);
+        self.queue
+            .write_buffer(&self.view_buffer, 0, bytemuck::bytes_of(&self.view_uniform));
 
         let mut encoder = self
             .device
@@ -237,6 +338,7 @@ impl State {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_bind_group(0, &self.view_bind_group, &[]);
             render_pass.draw(0..4, 0..1);
         }
 

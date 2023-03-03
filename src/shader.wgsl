@@ -1,3 +1,10 @@
+struct ViewUniform {
+    center: vec2<f32>,
+    extent: vec2<f32>,
+};
+@group(0) @binding(0)
+var<uniform> view: ViewUniform;
+
 struct VertexOutput {
     @builtin(position) clip_pos: vec4<f32>,
     @location(0) coord: vec2<f32>,
@@ -42,13 +49,11 @@ fn vs_main(
     @builtin(vertex_index) in_vertex_index: u32,
 ) -> VertexOutput {
     var out: VertexOutput;
-    let sizes = vec2(2.0, 1.5);
-    let center = vec2(-1.0, 0.0);
     let pos = vec2(
         2.0 * f32(i32(in_vertex_index & 1u)) - 1.0,
         2.0 * f32(i32(in_vertex_index >> 1u)) - 1.0,
     );
     out.clip_pos = vec4<f32>(pos.x, pos.y, 0.0, 1.0);
-    out.coord = sizes * pos + center;
+    out.coord = view.extent * pos + view.center;
     return out;
 }
