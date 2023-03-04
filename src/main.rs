@@ -309,11 +309,7 @@ impl State {
 
     fn input(&mut self, event: &WindowEvent) -> bool {
         match event {
-            WindowEvent::CursorMoved {
-                device_id,
-                position,
-                ..
-            } => {
+            WindowEvent::CursorMoved { position, .. } => {
                 let radius = f32::powf(2.0, self.view.scale);
                 let size = u32::min(self.size.width, self.size.height);
                 let dx = position.x - self.mouse.x;
@@ -328,12 +324,7 @@ impl State {
                 self.mouse.y = position.y;
                 true
             }
-            WindowEvent::MouseInput {
-                device_id,
-                state,
-                button,
-                ..
-            } => {
+            WindowEvent::MouseInput { state, button, .. } => {
                 let mask = match button {
                     MouseButton::Left => 1,
                     MouseButton::Right => 2,
