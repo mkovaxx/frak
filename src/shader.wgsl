@@ -17,7 +17,7 @@ fn mul_complex(a: vec2<f32>, b: vec2<f32>) -> vec2<f32> {
 }
 
 fn div_complex(a: vec2<f32>, b: vec2<f32>) -> vec2<f32> {
-    return vec2(a.x * b.x + a.y * b.y, a.y * b.x - a.x * b.y) / length(b);
+    return vec2(a.x * b.x + a.y * b.y, a.y * b.x - a.x * b.y) / dot(b, b);
 }
 
 fn eval(c: vec2<f32>, iter_max: u32) -> vec3<f32> {
