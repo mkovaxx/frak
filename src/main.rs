@@ -328,7 +328,7 @@ impl State {
                 let mask = match button {
                     MouseButton::Left => 1,
                     MouseButton::Right => 2,
-                    MouseButton::Middle => 3,
+                    MouseButton::Middle => 4,
                     MouseButton::Other(_) => 0,
                 };
                 match state {
